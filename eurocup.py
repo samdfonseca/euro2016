@@ -2,6 +2,7 @@ from collections import OrderedDict
 import logging
 import time
 from datetime import datetime
+from datetime import timedelta
 from Queue import Queue
 from threading import Thread
 import os
@@ -308,11 +309,11 @@ if __name__ == '__main__':
         if len(filter(lambda i: i['status'] != 'FINISHED', wbk.data_api_client.get_fixtures()['fixtures'])) == 0:
             break
         next_fixture = filter(lambda i: i['status'] != 'FINISHED', wbk.data_api_client.get_fixtures()['fixtures'])[0]
-        seconds_to_next_fixture = (dateutil.parser.parse(next_fixture['date']) - datetime.datetime.now(tzutc())).seconds
+        seconds_to_next_fixture = (dateutil.parser.parse(next_fixture['date']) - datetime.now(tzutc())).seconds
         if seconds_to_next_fixture > 0:
             logger.debug('Sleeping until: {}'.format(dateutil.parser.parse(next_fixture['date'])))
             time.sleep(seconds_to_next_fixture)
         else:
-            logger.debug('Sleeping until: {}'.format(datetime.datetime.now(tzutc())+datetime.timedelta(minutes=20)))
+            logger.debug('Sleeping until: {}'.format(datetime.now(tzutc())+timedelta(minutes=20)))
             time.sleep(20*60)
         
