@@ -8,6 +8,8 @@ from threading import Thread
 import os
 from StringIO import StringIO
 import re
+import SimpleHTTPServer
+import SocketServer
 
 from footballdata import SeasonClient
 
@@ -300,6 +302,21 @@ if __name__ == '__main__':
     wbk.score_participants_group_stage()
     finished_fixtures = filter(lambda i: i['status'] == 'FINISHED',
             wbk.data_api_client.get_fixtures()['fixtures'])
+    class redirectHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(301)
+            self.send_header('Location','https://docs.google.com/spreadsheets/d/'
+                    '1bVjqTw3r0kxj_ZdcSz2rSJBzttNGdeQ2wHCUCAiMvT4')
+            self.end_headers()
+    class serverThread(threading.Thread):
+        def __init__(self):
+            self.handler = SocketServer.TCPServer(('', 5000), redirectHandler)
+
+        def run(self):
+            logger.debug('Running redirect server on port 5000')
+            self.handler.server_forever()
+    server_thread = serverThread()
+    server_thread.start()
     while True:
         _finished_fixtures = filter(lambda i: i['status'] == 'FINISHED',
                 wbk.data_api_client.get_fixtures()['fixtures'])
