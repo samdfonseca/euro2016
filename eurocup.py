@@ -311,7 +311,7 @@ if __name__ == '__main__':
     class serverThread(Thread):
         def __init__(self):
             Thread.__init__(self)
-            self.port = os.getenv('PORT')
+            self.port = int(os.getenv('PORT'))
             self.handler = SocketServer.TCPServer(('', self.port), redirectHandler)
 
         def run(self):
