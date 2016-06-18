@@ -151,7 +151,7 @@ class EuroCupBracketWorkbook(object):
         self.CLIENT_SECRET = os.getenv('GOOGLE_API_CLIENT_SECRET')
         self.CREDENTIAL_CACHE = os.getenv('GOOGLE_API_CREDENTIAL_CACHE')
         self.credential_cache_file = credential_cache_file or 'cred_cache.json'
-        if self.CREDENTIAL_CACHE is not None:
+        if self.CREDENTIAL_CACHE is not None and not os.path.exists(self.credential_cache_file):
             with open(self.credential_cache_file, 'w') as f:
                 f.write(self.CREDENTIAL_CACHE)
         self.credentials = ia_credentials_helper(
