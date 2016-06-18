@@ -4,7 +4,9 @@ import time
 from datetime import datetime
 from Queue import Queue
 from threading import Thread
-from os import getenv
+import os
+from StringIO import StringIO
+import re
 
 from footballdata import SeasonClient
 
@@ -16,6 +18,7 @@ from dateutil.tz import tzutc
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logging.getLogger('sheetsync').setLevel(logging.DEBUG)
+logging.getLogger('footballdata').setLevel(logging.DEBUG)
 logging.basicConfig()
 
 
@@ -64,6 +67,7 @@ class Worker(Thread):
                 logger.fatal(e)
             finally:
                 self.tasks.task_done()
+
 
 class ThreadPool(object):
     def __init__(self, num_threads):
@@ -143,9 +147,13 @@ class EuroCupBracketWorkbook(object):
 
     def __init__(self, document_name=None, credential_cache_file=None):
         self.DOCUMENT_NAME = document_name or self.DOCUMENT_NAME
-        self.CLIENT_ID = getenv('GOOGLE_API_CLIENT_ID')
-        self.CLIENT_SECRET = getenv('GOOGLE_API_CLIENT_SECRET')
+        self.CLIENT_ID = os.getenv('GOOGLE_API_CLIENT_ID')
+        self.CLIENT_SECRET = os.getenv('GOOGLE_API_CLIENT_SECRET')
+        self.CREDENTIAL_CACHE = os.getenv('GOOGLE_API_CREDENTIAL_CACHE')
         self.credential_cache_file = credential_cache_file or 'cred_cache.json'
+        if self.CREDENTIAL_CACHE is not None:
+            with open(self.credential_cache_file, 'w') as f:
+                f.write(self.CREDENTIAL_CACHE)
         self.credentials = ia_credentials_helper(
                 self.CLIENT_ID,
                 self.CLIENT_SECRET,
