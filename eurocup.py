@@ -306,7 +306,7 @@ if __name__ == '__main__':
         def do_GET(self):
             self.send_response(301)
             self.send_header('Location','https://docs.google.com/spreadsheets/d/'
-                    '1bVjqTw3r0kxj_ZdcSz2rSJBzttNGdeQ2wHCUCAiMvT4')
+                    '{}'.format(os.getenv('BRACKET_SPREADSHEET_KEY')))
             self.end_headers()
     class serverThread(Thread):
         def __init__(self):
