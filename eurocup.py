@@ -310,6 +310,7 @@ if __name__ == '__main__':
             self.end_headers()
     class serverThread(Thread):
         def __init__(self):
+            Thread.__init__(self)
             self.handler = SocketServer.TCPServer(('', 5000), redirectHandler)
 
         def run(self):
