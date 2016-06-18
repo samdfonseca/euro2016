@@ -308,7 +308,7 @@ if __name__ == '__main__':
             self.send_header('Location','https://docs.google.com/spreadsheets/d/'
                     '1bVjqTw3r0kxj_ZdcSz2rSJBzttNGdeQ2wHCUCAiMvT4')
             self.end_headers()
-    class serverThread(threading.Thread):
+    class serverThread(Thread):
         def __init__(self):
             self.handler = SocketServer.TCPServer(('', 5000), redirectHandler)
 
