@@ -315,7 +315,7 @@ if __name__ == '__main__':
 
         def run(self):
             logger.debug('Running redirect server on port 5000')
-            self.handler.server_forever()
+            self.handler.serve_forever()
     server_thread = serverThread()
     server_thread.start()
     while True:
