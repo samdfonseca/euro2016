@@ -311,10 +311,11 @@ if __name__ == '__main__':
     class serverThread(Thread):
         def __init__(self):
             Thread.__init__(self)
-            self.handler = SocketServer.TCPServer(('', 5000), redirectHandler)
+            self.port = os.getenv('PORT')
+            self.handler = SocketServer.TCPServer(('', self.port), redirectHandler)
 
         def run(self):
-            logger.debug('Running redirect server on port 5000')
+            logger.debug('Running redirect server on port {}'.format(self.port))
             self.handler.serve_forever()
     server_thread = serverThread()
     server_thread.start()
