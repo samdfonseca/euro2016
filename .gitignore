@@ -1,2 +1,7 @@
 *.pyc
+.env
+client_secret.json
+cred_cache.json
+venv/
+venv3/
 

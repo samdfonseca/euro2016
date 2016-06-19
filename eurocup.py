@@ -1,20 +1,27 @@
+import sys
+IS_PY2 = sys.version_info.major == 2
 from collections import OrderedDict
 import logging
 import time
-from datetime import datetime
 from datetime import timedelta
-from Queue import Queue
-from threading import Thread
+from datetime import datetime
+from threading import Thread, RLock
 import os
-from StringIO import StringIO
 import re
-import SimpleHTTPServer
-import SocketServer
+if IS_PY2:
+    from Queue import Queue
+    import SimpleHTTPServer
+    import SocketServer
+    from sheetsync import Sheet, ia_credentials_helper
+else:
+    from queue import Queue
+    from http import server as SimpleHTTPServer
+    import socketserver as SocketServer
+    from sheetsync3 import Sheet, ia_credentials_helper
 
 from footballdata import SeasonClient
 
 import simplejson as json
-from sheetsync import Sheet, ia_credentials_helper
 from requests.exceptions import ConnectionError
 import dateutil
 from dateutil.tz import tzutc
@@ -283,14 +290,26 @@ class EuroCupBracketGroupStagePicksSheet(object):
     def calculate_group_score(self, group):
         standings = self.wbk.data_api_client.get_group(group)
         picks = filter(lambda i: i != '', self.get_group_pics(group))
+        baseLogMsg = 'SCORING Participant {} Group {}'.format(
+                self.worksheet_name, group)
+        logMsg = '{}: Picks - {}'.format(baseLogMsg, ', '.join(picks))
+        logger.debug(logMsg)
         standing_ids = map(lambda i: i['teamId'], standings)
+        standing_abbrevs = map(lambda i: team_ids[i['teamId']], standings)
+        logMsg = '{}: Group Standings - {}'.format(baseLogMsg, ', '.join(standing_abbrevs))
+        logger.debug(logMsg)
         pick_ids = map(lambda i: team_abbreviations[i], picks)
         score = 0
         for i, pick_id in enumerate(pick_ids):
             if self.wbk.does_team_advance(pick_id):
                 score += 1
+                logMsg = '{}: 1 point for {} to advance'.format(baseLogMsg, team_ids[pick_id])
+                logger.debug(logMsg)
                 if standing_ids[i] == pick_id:
                     score += 1
+                    logMsg = '{}: 1 point for {} to finish {} in group'.format(
+                            baseLogMsg, team_ids[pick_id],['1st','2nd','3rd'][i])
+                    logger.debug(logMsg)
         return score
 
     def calculate_score(self):
@@ -298,41 +317,56 @@ class EuroCupBracketGroupStagePicksSheet(object):
 
 
 if __name__ == '__main__':
-    wbk = EuroCupBracketWorkbook()
-    wbk.score_participants_group_stage()
-    finished_fixtures = filter(lambda i: i['status'] == 'FINISHED',
-            wbk.data_api_client.get_fixtures()['fixtures'])
-    class redirectHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(301)
-            self.send_header('Location','https://docs.google.com/spreadsheets/d/'
-                    '{}'.format(os.getenv('BRACKET_SPREADSHEET_KEY')))
-            self.end_headers()
-    class serverThread(Thread):
-        def __init__(self):
-            Thread.__init__(self)
-            self.port = int(os.getenv('PORT'))
-            self.handler = SocketServer.TCPServer(('', self.port), redirectHandler)
+    try:
+        wbk = EuroCupBracketWorkbook()
+        wbk_lock = RLock()
 
-        def run(self):
-            logger.debug('Running redirect server on port {}'.format(self.port))
-            self.handler.serve_forever()
-    server_thread = serverThread()
-    server_thread.start()
-    while True:
-        _finished_fixtures = filter(lambda i: i['status'] == 'FINISHED',
-                wbk.data_api_client.get_fixtures()['fixtures'])
-        if len(_finished_fixtures) != len(finished_fixtures):
-            wbk.score_participants_group_stage()
-            finished_fixtures = _finished_fixtures
-        if len(filter(lambda i: i['status'] != 'FINISHED', wbk.data_api_client.get_fixtures()['fixtures'])) == 0:
-            break
-        next_fixture = filter(lambda i: i['status'] != 'FINISHED', wbk.data_api_client.get_fixtures()['fixtures'])[0]
-        seconds_to_next_fixture = (dateutil.parser.parse(next_fixture['date']) - datetime.now(tzutc())).seconds
-        if seconds_to_next_fixture > 0:
-            logger.debug('Sleeping until: {}'.format(dateutil.parser.parse(next_fixture['date'])))
-            time.sleep(seconds_to_next_fixture)
-        else:
-            logger.debug('Sleeping until: {}'.format(datetime.now(tzutc())+timedelta(minutes=20)))
-            time.sleep(20*60)
-        
+        class scoreThread(Thread):
+            def run(self):
+                with wbk_lock:
+                    wbk.score_participants_group_stage()
+
+        class serverRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(301)
+                self.send_header('Location','https://docs.google.com/spreadsheets/d/'
+                        '{}'.format(os.getenv('BRACKET_SPREADSHEET_KEY')))
+                self.end_headers()
+            def do_POST(self):
+                if self.path == '/updatescore':
+                    self.send_response(200)
+                    scoreThread().run()
+                else:
+                    self.send_response(404)
+
+        class serverThread(Thread):
+            def __init__(self, handler, urlpath=None):
+                self.urlpath = urlpath or ''
+                Thread.__init__(self)
+                self.port = int(os.getenv('PORT'))
+                self.handler = SocketServer.TCPServer((self.urlpath, self.port), handler)
+
+            def run(self):
+                logger.debug('Running server on port {}, urlpath {}'.format(self.port, self.urlpath))
+                self.handler.serve_forever()
+
+        class sleepThread(Thread):
+            def run(self):
+                sleep_interval = int(os.getenv('SCORING_SLEEP_INTERVAL'))
+                while True:
+                    scoreThread().run()
+                    if wbk.data_api_client.get_season()['currentMatchday'] > 3:
+                        break
+                    next_fixture = filter(lambda i: i['status'] != 'FINISHED', wbk.data_api_client.get_fixtures()['fixtures'])[0]
+                    seconds_to_next_fixture = (dateutil.parser.parse(next_fixture['date']) - datetime.now(tzutc())).seconds
+                    logger.debug('Next Fixture {} v. {}: {}'.format(
+                            next_fixture['homeTeamName'], next_fixture['awayTeamName'],
+                            dateutil.parser.parse(next_fixture['date'])))
+                    time.sleep(sleep_interval)
+
+        pool = ThreadPool(2)
+        pool.add_task(lambda: serverThread(serverRequestHandler).run())
+        pool.add_task(lambda: sleepThread().run())
+        pool.wait_completion()
+    except KeyboardInterrupt:
+        sys.exit()

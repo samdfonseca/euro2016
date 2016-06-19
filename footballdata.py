@@ -1,11 +1,16 @@
+import sys
+IS_PY2 = sys.version_info.major == 2
 import simplejson as json
 import requests
 import logging
-from urlparse import urljoin
 import time
 from collections import OrderedDict
 import functools
 from os import getenv
+if IS_PY2:
+    from urlparse import urljoin
+else:
+    from urllib.parse import urljoin
 
 from expiringdict import ExpiringDict
 
