@@ -1,1 +1,1 @@
-web: python eurocup.py
+web: 
